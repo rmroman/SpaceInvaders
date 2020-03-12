@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 
@@ -14,6 +15,13 @@ class PantallaSpaceInvaders extends Pantalla
     // Aliens
     private Array<Alien> arrAliens;
     private Texture texturaAlien;
+    private float TIEMPO_PASO = 0.5f;
+    private int MAX_PASOS = 32;
+    private int numeroPasos = MAX_PASOS/2;  // Ya inician en el centro
+    private Direccion direccion = Direccion.DERECHA;
+    private float timerAlienMover = 0;
+    private final int COLUMNAS = 11;
+    private final int RENGLONES = 5;
 
     // Nave
     private Nave nave;
@@ -48,8 +56,7 @@ class PantallaSpaceInvaders extends Pantalla
     }
 
     private void crearAliens() {
-        int COLUMNAS = 11;
-        int RENGLONES = 5;
+
         arrAliens = new Array<>(RENGLONES*COLUMNAS);
         float dx = ANCHO*0.8f / COLUMNAS;
         float dy = ALTO*0.4f / RENGLONES;
@@ -69,9 +76,9 @@ class PantallaSpaceInvaders extends Pantalla
     public void render(float delta) {
         //Gdx.app.log("DELTA", delta+" s");
         // ACTUALIZACIONES
-        moverNave();
-        moverBala(delta);
+        actualizar(delta);
 
+        // DIBUJAR
         borrarPantalla(0,0,0);
         batch.setProjectionMatrix(camara.combined);
 
@@ -86,6 +93,59 @@ class PantallaSpaceInvaders extends Pantalla
         }
 
         batch.end();
+    }
+
+    private void actualizar(float delta) {
+        moverNave();
+        moverBala(delta);
+        moverEnemigos(delta);
+        probarColisiones();
+    }
+
+    private void moverEnemigos(float delta) {
+        timerAlienMover += delta;
+        if (timerAlienMover>=TIEMPO_PASO) {
+            timerAlienMover = 0;
+            float paso = ANCHO * 0.2f / MAX_PASOS;
+            // Operador ? :
+            float pasoDir = direccion==Direccion.DERECHA?paso:-paso;
+            for (Alien alien : arrAliens) {
+                alien.mover(pasoDir);
+            }
+
+            numeroPasos++;
+            if (numeroPasos>=MAX_PASOS) {
+                if (direccion==Direccion.DERECHA) {
+                    direccion = Direccion.IZQUIERDA;
+                } else {
+                    direccion = Direccion.DERECHA;
+                }
+                numeroPasos = 0;
+                // Baja un paso
+                float pasoAbajo = ALTO*0.4f / RENGLONES;
+                for (Alien alien :
+                        arrAliens) {
+                    alien.bajar(pasoAbajo);
+                }
+            }
+        }
+    }
+
+    // Prueba si la bala le pegó a un enemigo
+    private void probarColisiones() {
+        if (bala!=null) {
+            // Se pueden borrar elementos
+            for (int i = arrAliens.size - 1; i >= 0; i--) {
+                Alien alien = arrAliens.get(i);
+                Rectangle rectAlien = alien.sprite.getBoundingRectangle();
+                Rectangle rectBala = bala.sprite.getBoundingRectangle();
+                if (rectAlien.overlaps(rectBala)) {
+                    arrAliens.removeIndex(i);
+                    bala = null;
+                    break;
+                }
+            }
+        }
     }
 
     private void moverBala(float delta) {
