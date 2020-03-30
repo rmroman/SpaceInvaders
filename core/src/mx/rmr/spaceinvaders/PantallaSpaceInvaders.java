@@ -3,14 +3,29 @@ package mx.rmr.spaceinvaders;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.ParticleEffect;
+import com.badlogic.gdx.graphics.g2d.ParticleEmitter;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.viewport.Viewport;
 
 class PantallaSpaceInvaders extends Pantalla
 {
     private final Juego juego;
+
+    // Sistema de partículas
+    private ParticleEffect sistemaParticulas;
+    private ParticleEmitter emisorFuego;
+
+    // Pausa
+    private EscenaPausa escenaPausa;
+    private EstadoJuego estadoJuego = EstadoJuego.JUGANDO;        // JUGANDO, PAUSADO, GANO, PERDIO, etc
 
     // Aliens
     private Array<Alien> arrAliens;
@@ -32,6 +47,9 @@ class PantallaSpaceInvaders extends Pantalla
     private Bala bala;      // null
     private Texture texturaBala;
 
+    // Marcador
+    private Marcador marcador;
+
     public PantallaSpaceInvaders(Juego juego) {
         this.juego = juego;
     }
@@ -41,8 +59,25 @@ class PantallaSpaceInvaders extends Pantalla
         cargarTexturas();
         crearAliens();
         crearNave();
+        crearMarcador();
+        // Sistema de partículas
+        crearParticulas();
 
         Gdx.input.setInputProcessor(new ProcesadorEntrada());
+    }
+
+    private void crearParticulas() {
+        sistemaParticulas = new ParticleEffect();
+        sistemaParticulas.load(Gdx.files.internal("fuego.p"),
+                Gdx.files.internal(""));
+        Array<ParticleEmitter> emisores = sistemaParticulas.getEmitters();
+        emisorFuego = emisores.get(0);
+        emisores.get(0).setPosition(ANCHO/2, ALTO/2);
+        sistemaParticulas.start();
+    }
+
+    private void crearMarcador() {
+        marcador = new Marcador(0.2f*ANCHO, 0.9f*ALTO);
     }
 
     private void crearNave() {
@@ -76,7 +111,10 @@ class PantallaSpaceInvaders extends Pantalla
     public void render(float delta) {
         //Gdx.app.log("DELTA", delta+" s");
         // ACTUALIZACIONES
-        actualizar(delta);
+        if (estadoJuego==EstadoJuego.JUGANDO) {
+            actualizar(delta);
+            sistemaParticulas.update(delta);        // Para aplicar física
+        }
 
         // DIBUJAR
         borrarPantalla(0,0,0);
@@ -92,7 +130,17 @@ class PantallaSpaceInvaders extends Pantalla
             bala.render(batch);
         }
 
+        // Marcador
+        marcador.render(batch);
+
+        sistemaParticulas.draw(batch);
+
+
         batch.end();
+
+        if (estadoJuego == EstadoJuego.PAUSADO) {
+            escenaPausa.draw();
+        }
     }
 
     private void actualizar(float delta) {
@@ -142,6 +190,7 @@ class PantallaSpaceInvaders extends Pantalla
                 if (rectAlien.overlaps(rectBala)) {
                     arrAliens.removeIndex(i);
                     bala = null;
+                    marcador.marcar(1);
                     break;
                 }
             }
@@ -185,7 +234,11 @@ class PantallaSpaceInvaders extends Pantalla
 
     @Override
     public void dispose() {
-
+        texturaAlien.dispose();
+        texturaBala.dispose();
+        texturaNave.dispose();
+        sistemaParticulas.dispose();
+        escenaPausa.dispose();
     }
 
     private class ProcesadorEntrada implements InputProcessor
@@ -225,7 +278,12 @@ class PantallaSpaceInvaders extends Pantalla
                     movimiento = Movimiento.DERECHA;
                 } else {
                     // Izquierda
-                    movimiento = Movimiento.IZQUIERDA;
+                    //movimiento = Movimiento.IZQUIERDA;
+                    //PAUSAR EL JUEGO
+                    estadoJuego = EstadoJuego.PAUSADO;
+                    if (escenaPausa==null) {
+                        escenaPausa = new EscenaPausa(vista, batch);
+                    }
                 }
             }
             return true;
@@ -260,4 +318,41 @@ class PantallaSpaceInvaders extends Pantalla
         IZQUIERDA,
         QUIETO
     }
+
+    // Clase Pause (ventana que se muestra cuando el usuario pausa la app)
+    class EscenaPausa extends Stage
+    {
+        public EscenaPausa(Viewport vista, SpriteBatch batch) {
+            super(vista, batch);
+
+            Pixmap pixmap = new Pixmap((int)(ANCHO*0.7f), (int)(ALTO*0.8f),
+                    Pixmap.Format.RGBA8888);
+            pixmap.setColor(0, 0.5f, 0, 0.5f);
+            pixmap.fillCircle(300,300, 300);
+            Texture texturaCirculo = new Texture(pixmap);
+
+            Image imgCirculo = new Image(texturaCirculo);
+            imgCirculo.setPosition(ANCHO/2 - pixmap.getWidth()/2,
+                    ALTO/2 - pixmap.getHeight()/2);
+
+            this.addActor(imgCirculo);
+        }
+    }
+
+    private enum EstadoJuego
+    {
+        JUGANDO,
+        PAUSADO,
+        GANO,
+        PERDIO
+    }
 }
+
+
+
+
+
+
+
+
+
